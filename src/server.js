@@ -4,6 +4,21 @@ const cors = require("cors");
 const { default: mongoose } = require("mongoose");
 const app = express();
 const User = require("./models/users.model");
+const passport = require("passport");
+const cookieSession = require("cookie-session");
+require("dotenv").config();
+
+const cookieEncryptionKey = "aaaa";
+
+app.use(
+  cookieSession({
+    keys: [cookieEncryptionKey],
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+require("./config/passport");
 
 app.use(cors());
 app.use(express.json());
@@ -12,7 +27,7 @@ app.use(express.urlencoded({ extended: false }));
 mongoose.set("strictQuery", false);
 mongoose
   .connect(
-    `mongodb+srv://admin:3rIqjfTuf6UCaBYQ@bike-web.focyt.mongodb.net/?retryWrites=true&w=majority&appName=bike-web`
+    `mongodb+srv://admin:${process.env.DB_PW}@bike-web.focyt.mongodb.net/?retryWrites=true&w=majority&appName=bike-web`
   )
   .then(() => {
     console.log("mongodb connected");
@@ -28,12 +43,29 @@ app.listen(port, () => {
   console.log(`Listening on ${port}`);
 });
 
-// tmp
 app.get("/", (req, res) => {
   res.json({ message: "AAA" });
 });
 
-//tmp
+app.post("/login", (req, res, next) => {
+  passport.authenticate("local", (err, user, info) => {
+    if (err) {
+      return next(err);
+    }
+
+    if (!user) {
+      return res.json({ msg: info });
+    }
+
+    req.logIn(user, function (err) {
+      if (err) {
+        return next(err);
+      }
+      res.redirect("/");
+    });
+  });
+});
+
 app.post("/signup", async (req, res) => {
   const user = new User(req.body);
   try {
