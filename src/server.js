@@ -6,15 +6,32 @@ const app = express();
 const User = require("./models/users.model");
 const passport = require("passport");
 const cookieSession = require("cookie-session");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const cookieEncryptionKey = "aaaa";
 
 app.use(
   cookieSession({
+    name: "cookie-session-name",
     keys: [cookieEncryptionKey],
   })
 );
+
+// register regenerate & save after the cookieSession middleware initialization
+app.use(function (request, response, next) {
+  if (request.session && !request.session.regenerate) {
+    request.session.regenerate = (cb) => {
+      cb();
+    };
+  }
+  if (request.session && !request.session.save) {
+    request.session.save = (cb) => {
+      cb();
+    };
+  }
+  next();
+});
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -48,7 +65,7 @@ app.get("/", (req, res) => {
 });
 
 app.post("/login", (req, res, next) => {
-  passport.authenticate("local", (err, user, info) => {
+  passport.authenticate("local", async (err, user, info) => {
     if (err) {
       return next(err);
     }
@@ -57,13 +74,38 @@ app.post("/login", (req, res, next) => {
       return res.json({ msg: info });
     }
 
-    req.logIn(user, function (err) {
+    req.logIn(user, async (err) => {
       if (err) {
         return next(err);
       }
-      res.redirect("/");
+
+      const accessToken = jwt.sign(
+        {
+          email: user.email,
+        },
+        process.env.JWT_KEY,
+        { expiresIn: "15s", issuer: "weather", subject: "user_info" }
+      );
+
+      const refreshToken = jwt.sign({}, process.env.JWT_KEY, {
+        expiresIn: "1d",
+        issuer: "weather",
+        subject: "user_info",
+      });
+
+      user.token = refreshToken;
+      user.save();
+
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000,
+      });
+      return res.status(200).json({
+        success: true,
+        accessToken,
+      });
     });
-  });
+  })(req, res, next);
 });
 
 app.post("/signup", async (req, res) => {

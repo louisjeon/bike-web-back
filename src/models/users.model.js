@@ -14,6 +14,9 @@ const userSchema = mongoose.Schema({
     unique: true,
     sparse: true,
   },
+  token: {
+    type: String,
+  },
 });
 
 userSchema.methods.comparePassword = function (plainPassword, cb) {
